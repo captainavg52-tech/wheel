@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheel Tracking & Dispatch System</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #18bc9c;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --light: #ecf0f1;
+            --dark: #34495e;
+            --accent: #2980b9;
+            --color-newly-mounted: #2980b9;  
+            --color-old-ge-18: #2ecc71;      
+            --color-old-lt-18: #e74c3c;      
+        }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f6f7; color: #333; margin: 0; padding: 10px; }
+        
+        .login-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 90vh;
+        }
+        .login-card {
+            background: white;
+            padding: 30px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 360px;
+            border-top: 5px solid var(--primary);
+            box-sizing: border-box;
+        }
+        .login-card h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: var(--primary);
+            text-align: center;
+            font-size: 1.4rem;
+        }
+        .error-msg {
+            color: var(--danger);
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 12px;
+            text-align: center;
+            display: none;
+        }
+
+        #mainAppContainer { display: none; }
+        #loginScreen { display: flex; }
+
+        header { background-color: var(--primary); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
+        @media (min-width: 600px) { header { flex-direction: row; justify-content: space-between; align-items: center; } }
+        .collapsible-header { background-color: var(--primary); color: white; padding: 12px 15px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+        .collapsible-header::after { content: '▼'; font-size: 0.8rem; }
+        .collapsible-header.active::after { content: '▲'; }
+        .collapsible-content { display: none; margin-bottom: 15px; }
+        .grid { display: flex; flex-direction: column; gap: 15px; }
+        @media (min-width: 1024px) { .grid { display: grid; grid-template-columns: 340px 1fr; } }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-top: 4px solid var(--primary); }
+        .card.action-card { border-top-color: var(--secondary); }
+        .card.pool-card { border-top-color: var(--accent); }
+        .card.issued-card { border-top-color: var(--warning); }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.85em; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 0.95em; }
+        .btn { background-color: var(--primary); color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.95em; }
+        .btn:hover { opacity: 0.9; }
+        .btn-success { background-color: var(--secondary); }
+        .btn-warning { background-color: var(--warning); }
+        .btn-danger { background-color: var(--danger); }
+        .btn-group { display: flex; gap: 8px; }
+        .table-container { overflow-x: auto; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+        th, td { border: 1px solid #ddd; padding: 8px 6px; text-align: left; }
+        th { background-color: #f8f9fa; color: var(--dark); font-weight: 600; }
+        
+        .row-newly-mounted { background-color: rgba(41, 128, 185, 0.25) !important; }
+        .row-old-ge-18 { background-color: rgba(46, 204, 113, 0.25) !important; }
+        .row-old-lt-18 { background-color: rgba(231, 76, 60, 0.25) !important; }
+        .row-unknown { background-color: rgba(149, 165, 166, 0.20) !important; }
+
+        .group-box { border: 1px dashed var(--secondary); padding: 12px; margin-bottom: 12px; border-radius: 6px; background: #f4fbf9; }
+        .badge { display: inline-block; padding: 3px 6px; font-size: 0.8em; color: white; border-radius: 4px; font-weight: bold; }
+        .badge-ss23 { background-color: var(--color-newly-mounted); }
+        .badge-ss1 { background-color: var(--color-old-ge-18); }
+        .badge-div { background-color: var(--color-old-lt-18); }
+        .badge-unknown { background-color: #7f8c8d; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; padding: 10px; }
+        .modal-content { background: white; padding: 15px; border-radius: 8px; width: 100%; max-width: 850px; max-height: 90vh; overflow-y: auto; }
+        
+        @media print {
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea { position: absolute; left: 0; top: 0; width: 100%; border: none; box-shadow: none; padding: 0; display: block !important; }
+            .no-print, .collapsible-header, .login-wrapper { display: none !important; }
+            .collapsible-content { display: block !important; }
+        }
+    </style>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<div id="loginScreen" class="login-wrapper no-print">
+    <div class="login-card">
+        <h2>System Authorization</h2>
+        <div id="loginError" class="error-msg">Invalid Email or Password!</div>
+        <form id="loginForm" onsubmit="executeLogin(event)">
+            <div class="form-group">
+                <label>Email ID</label>
+                <input type="email" id="loginUser" required placeholder="Enter Firebase User Email">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="loginPass" required placeholder="Enter password">
+            </div>
+            <button type="submit" class="btn" style="width: 100%; background-color: var(--primary); margin-top: 5px;">Login Dashboard</button>
+        </form>
+    </div>
+</div>
+
+<div id="mainAppContainer">
+    <header>
+        <div>
+            <h1 style="font-size: 1.3rem; margin: 0;">Wheel Tracking & Dispatch System</h1>
+            <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 2px;">Workshop Management App</div>
+        </div>
+        <div class="btn-group no-print">
+            <button class="btn btn-warning" onclick="openSummary()">Month Summary</button>
+            <button class="btn btn-success" onclick="window.print()">Print</button>
+            <button class="btn btn-danger" onclick="executeLogout()">Logout</button>
+        </div>
+    </header>
+    <div class="grid">
+        <div>
+            <div class="card no-print">
+                <h2 id="formTitle" style="margin-top: 0; margin-bottom: 10px; border-bottom: 2px solid var(--primary); padding-bottom: 4px; font-size: 1.15rem; color: var(--primary);">Add Incoming Wheel</h2>
+                <form id="wheelForm" onsubmit="addWheel(event)">
+                    <input type="hidden" id="editKey" value="-1">
+                    
+                    <div class="form-group">
+                        <label>Newly Mounted?</label>
+                        <select id="newlyMounted" onchange="handleNewlyMountedToggle(true)">
+                            <option value="No">No</option>
+                            <option value="Yes">Yes</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Wheel Serial Number</label>
+                        <input type="text" id="serialNo" placeholder="e.g., WH-102">
+                    </div>
+                    <div class="form-group">
+                        <label>Arrival Month</label>
+                        <input type="month" id="arrivalMonth">
+                    </div>
+                    <div class="form-group">
+                        <label>Bearing Type</label>
+                        <select id="bearingType">
+                            <option value="NEW">NEW (48 M)</option>
+                            <option value="Refurbished">Refurbished (39 M)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="bearingDateGroup">
+                        <label>Bearing Mounting Month & Year</label>
+                        <input type="month" id="bearingDate">
+                    </div>
+                    <div class="form-group">
+                        <label>Diameter (mm)</label>
+                        <input type="number" step="0.1" id="diameter" placeholder="915.0">
+                    </div>
+                    
+                    <button type="submit" id="submitBtn" class="btn btn-success" style="width:100%;">Register Wheel</button>
+                    <button type="button" id="cancelEditBtn" class="btn btn-danger" style="width:100%; margin-top: 5px; display: none;" onclick="cancelEdit()">Cancel Edit</button>
+                </form>
+            </div>
+            <div class="collapsible-header no-print" onclick="toggleSection('automatedDispatchSection', this)">Automated Dispatch</div>
+            <div id="automatedDispatchSection" class="collapsible-content no-print">
+                <div class="card action-card">
+                    <button class="btn" style="width: 100%; background-color:var(--primary);" onclick="generateAutomatedGroups()">Generate Smart Groups</button>
+                    <div id="groupGenerationArea" style="margin-top:10px;"></div>
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="collapsible-header no-print" onclick="toggleSection('availablePoolSection', this)">Available Wheel Pool</div>
+            <div id="availablePoolSection" class="collapsible-content no-print">
+                <div class="card pool-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Serial [Month]</th><th>Diameter</th><th>Bearing Month</th><th>Life</th><th>Target</th><th>Manual Des.</th><th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="availableTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-header" id="issuedHeaderToggle" onclick="toggleSection('issuedWheelsSection', this)">Issued Wheels</div>
+            <div id="issuedWheelsSection" class="collapsible-content" style="display: block;">
+                <div class="card issued-card" id="printArea">
+                    <h2 id="printTitle" style="margin-top: 0; margin-bottom: 10px; border-bottom: 2px solid var(--primary); padding-bottom: 4px; font-size: 1.15rem; color: var(--primary);">Issued Wheels (Today)</h2>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th><th>Serials [Month References]</th><th>Diameters</th><th>Destination Assigned</th><th>Type Logic</th><th class="no-print">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="issuedTodayTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="summaryModal">
+    <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-bottom: 15px;">
+            <h2 style="color: var(--primary); font-size:1.2rem; margin:0;">Monthly Summary Report</h2>
+            <button class="btn btn-danger" onclick="closeSummary()" style="padding:4px 10px;">Close</button>
+        </div>
+        <div class="form-group" style="max-width: 200px;">
+            <label>Filter Arrival Month</label>
+            <input type="month" id="summaryMonthFilter" onchange="renderMonthlySummary()">
+        </div>
+        <div id="summaryContent"></div>
+    </div>
+</div>
+
+<script>
+    // -------------------------------------------------------------
+    // PASTE YOUR FIREBASE CONFIGURATION CONFIG HERE
+    // -------------------------------------------------------------
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        databaseURL: "YOUR_DATABASE_URL",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+    
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const auth = firebase.auth();
+
+    let wheels = {};
+    let issuedLog = {};
+    let tempGroups = [];
+
+    // Track Authentication Status
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            showSecureDashboard();
+            // Real-time data sync
+            database.ref('wheels').on('value', snapshot => {
+                wheels = snapshot.val() || {};
+                refreshData();
+                generateAutomatedGroups();
+            });
+            database.ref('issuedLog').on('value', snapshot => {
+                issuedLog = snapshot.val() || {};
+                refreshData();
+            });
+        } else {
+            document.getElementById('mainAppContainer').style.setProperty('display', 'none', 'important');
+            document.getElementById('loginScreen').style.setProperty('display', 'flex', 'important');
+        }
+    });
+
+    function executeLogin(e) {
+        e.preventDefault();
+        const email = document.getElementById('loginUser').value.trim();
+        const pass = document.getElementById('loginPass').value;
+        const err = document.getElementById('loginError');
+
+        auth.signInWithEmailAndPassword(email, pass)
+            .then(() => { err.style.display = 'none'; })
+            .catch(error => {
+                err.innerText = error.message;
+                err.style.display = 'block';
+                document.getElementById('loginPass').value = '';
+            });
+    }
+
+    function executeLogout() {
+        auth.signOut();
+    }
+
+    function showSecureDashboard() {
+        document.getElementById('loginScreen').style.setProperty('display', 'none', 'important');
+        document.getElementById('mainAppContainer').style.setProperty('display', 'block', 'important');
+
+        const today = new Date();
+        const formattedMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        
+        document.getElementById('arrivalMonth').value = formattedMonth;
+        document.getElementById('bearingDate').value = formattedMonth;
+        document.getElementById('summaryMonthFilter').value = formattedMonth;
+        
+        document.getElementById('issuedHeaderToggle').classList.add('active');
+        document.getElementById('printTitle').innerText = `Issued Wheels (Today: ${today.toLocaleDateString('en-IN')})`;
+    }
+
+    function toggleSection(id, headerEl) {
+        const section = document.getElementById(id);
+        if (section.style.display === "block" || getComputedStyle(section).display === "block") {
+            section.style.display = "none";
+            headerEl.classList.remove('active');
+        } else {
+            section.style.display = "block";
+            headerEl.classList.add('active');
+        }
+    }
+
+    function handleNewlyMountedToggle(shouldOverwriteDate = true) {
+        const isNewlyMounted = document.getElementById('newlyMounted').value === 'Yes';
+        const bearingDateInput = document.getElementById('bearingDate');
+        
+        if (isNewlyMounted) {
+            if (shouldOverwriteDate) {
+                const today = new Date();
+                bearingDateInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            }
+            document.getElementById('bearingDateGroup').style.opacity = "0.6";
+            bearingDateInput.style.pointerEvents = "none";
+        } else {
+            document.getElementById('bearingDateGroup').style.opacity = "1";
+            bearingDateInput.style.pointerEvents = "auto";
+        }
+    }
+
+    function calculateRemainingLife(bearingDateStr, bearingType) {
+        if(!bearingDateStr) return null;
+        const parts = bearingDateStr.split('-');
+        const bYear = parseInt(parts[0], 10);
+        const bMonth = parseInt(parts[1], 10) - 1; 
+        
+        const bearingDate = new Date(bYear, bMonth, 1);
+        const today = new Date();
+        
+        let diffMonths = (today.getFullYear() - bearingDate.getFullYear()) * 12;
+        diffMonths -= bearingDate.getMonth();
+        diffMonths += today.getMonth();
+        
+        const maxLife = bearingType === 'NEW' ? 48 : 39;
+        return Math.max(0, maxLife - diffMonths);
+    }
+
+    function formatDisplayMonth(dateStr) {
+        if(!dateStr) return 'N/A';
+        const parts = dateStr.split('-');
+        return `${parts[1]}/${parts[0]}`;
+    }
+
+    function analyzeWheelTarget(w) {
+        if(!w.serialNo || !w.arrivalMonth || (w.newlyMounted === 'No' && !w.bearingDate)) {
+            return { remainingLife: "Unknown", priority: "Incomplete Details", colorClass: "row-unknown" };
+        }
+        if (w.newlyMounted === 'Yes') {
+            const maxLife = w.bearingType === 'NEW' ? 48 : 39;
+            return { remainingLife: maxLife, priority: "SS2/3", colorClass: "row-newly-mounted" };
+        }
+        const remainingLife = calculateRemainingLife(w.bearingDate, w.bearingType);
+        if(remainingLife === null) return { remainingLife: "Unknown", priority: "Incomplete Details", colorClass: "row-unknown" };
+        if (remainingLife >= 18) {
+            return { remainingLife, priority: "SS1", colorClass: "row-old-ge-18" };
+        }
+        return { remainingLife, priority: "Division Only", colorClass: "row-old-lt-18" };
+    }
+
+    function addWheel(e) {
+        e.preventDefault();
+        let serialNo = document.getElementById('serialNo').value.trim().toUpperCase();
+        let arrivalMonth = document.getElementById('arrivalMonth').value;
+        
+        if(!serialNo) serialNo = "UNKNOWN-SN";
+        if(!arrivalMonth) {
+            const today = new Date();
+            arrivalMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        }
+        const editKey = document.getElementById('editKey').value;
+        
+        // Duplicate Check
+        let isDuplicate = Object.keys(wheels).some(k => wheels[k].serialNo === serialNo && wheels[k].arrivalMonth === arrivalMonth && k !== editKey);
+        if(isDuplicate) { 
+            alert(`Serial "${serialNo}" already exists for the month ${formatDisplayMonth(arrivalMonth)}! Duplicates in the same month are restricted.`); 
+            return; 
+        }
+
+        const isNewlyMounted = document.getElementById('newlyMounted').value === 'Yes';
+        let finalBearingDate = document.getElementById('bearingDate').value;
+        if (isNewlyMounted) {
+            const today = new Date();
+            finalBearingDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        }
+
+        const wheelData = {
+            serialNo: serialNo,
+            arrivalMonth: arrivalMonth,
+            bearingDate: finalBearingDate,
+            diameter: document.getElementById('diameter').value ? parseFloat(document.getElementById('diameter').value) : null,
+            bearingType: document.getElementById('bearingType').value,
+            newlyMounted: document.getElementById('newlyMounted').value
+        };
+
+        if(editKey !== "-1") {
+            database.ref('wheels/' + editKey).set(wheelData);
+        } else {
+            database.ref('wheels').push(wheelData);
+        }
+
+        cancelEdit(); 
+    }
+
+    function editWheel(key) {
+        const w = wheels[key];
+        document.getElementById('editKey').value = key;
+        document.getElementById('newlyMounted').value = w.newlyMounted;
+        document.getElementById('serialNo').value = w.serialNo === "UNKNOWN-SN" ? "" : w.serialNo;
+        document.getElementById('arrivalMonth').value = w.arrivalMonth;
+        document.getElementById('bearingType').value = w.bearingType;
+        document.getElementById('bearingDate').value = w.bearingDate;
+        document.getElementById('diameter').value = w.diameter !== null ? w.diameter : "";
+        
+        handleNewlyMountedToggle(false);
+
+        document.getElementById('formTitle').innerText = `✏️ Edit Wheel Details`;
+        document.getElementById('submitBtn').innerText = `Update Details`;
+        document.getElementById('submitBtn').className = `btn btn-warning`;
+        document.getElementById('cancelEditBtn').style.display = `block`;
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelEdit() {
+        document.getElementById('editKey').value = "-1";
+        document.getElementById('wheelForm').reset();
+        
+        const today = new Date();
+        const formattedMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        document.getElementById('arrivalMonth').value = formattedMonth;
+        document.getElementById('bearingDate').value = formattedMonth;
+
+        document.getElementById('formTitle').innerText = `Add Incoming Wheel`;
+        document.getElementById('submitBtn').innerText = `Register Wheel`;
+        document.getElementById('submitBtn').className = `btn btn-success`;
+        document.getElementById('cancelEditBtn').style.display = `none`;
+        handleNewlyMountedToggle(true);
+    }
+
+    function refreshData() {
+        const tbody = document.getElementById('availableTableBody'); tbody.innerHTML = '';
+        
+        // Convert object to sorted array
+        let wheelsArray = Object.keys(wheels).map(key => ({ key, ...wheels[key] }));
+        wheelsArray.sort((a, b) => {
+            let snCompare = a.serialNo.localeCompare(b.serialNo, undefined, {numeric: true, sensitivity: 'base'});
+            if(snCompare !== 0) return snCompare;
+            return a.arrivalMonth.localeCompare(b.arrivalMonth);
+        });
+
+        wheelsArray.forEach((w) => {
+            const ann = analyzeWheelTarget(w);
+            let bc = 'badge-unknown';
+            if(ann.priority==='SS2/3') bc='badge-ss23'; 
+            if(ann.priority==='SS1') bc='badge-ss1'; 
+            if(ann.priority==='Division Only') bc='badge-div';
+            
+            const displayDiameter = w.diameter !== null ? `${w.diameter} mm` : '<span style="color:#777;font-style:italic;">Missing</span>';
+            const displayLife = typeof ann.remainingLife === 'number' ? `${ann.remainingLife} M` : ann.remainingLife;
+
+            tbody.innerHTML += `<tr class="${ann.colorClass}">
+                <td><strong>${w.serialNo}</strong> <br><small style="color:#2c3e50; font-weight:600;">[${formatDisplayMonth(w.arrivalMonth)}]</small></td>
+                <td>${displayDiameter}</td>
+                <td>${w.bearingDate ? formatDisplayMonth(w.bearingDate) : 'N/A'}<br><small>Type: ${w.bearingType}</small></td>
+                <td><strong>${displayLife}</strong></td><td><span class="badge ${bc}">${ann.priority}</span></td>
+                <td><select id="manualDes_${w.key}" style="padding:2px; font-size:0.9em;">
+                        <option value="UDZ">UDZ</option><option value="MD">MD</option><option value="JP">JP</option><option value="SS1">SS1</option><option value="SS2/3">SS2/3</option>
+                    </select></td>
+                <td>
+                    <div style="display:flex; gap:4px;">
+                        <button class="btn btn-success" style="padding:2px 6px; font-size:0.85em;" onclick="issueIndividual('${w.key}')">➡</button>
+                        <button class="btn" style="padding:2px 6px; font-size:0.85em; background-color:#7f8c8d;" onclick="editWheel('${w.key}')">✏️</button>
+                    </div>
+                </td></tr>`;
+        });
+        
+        const todayStr = new Date().toDateString();
+        const issuedTbody = document.getElementById('issuedTodayTableBody'); issuedTbody.innerHTML = '';
+        
+        Object.keys(issuedLog).forEach((key) => {
+            let log = issuedLog[key];
+            if(new Date(log.timestampRaw).toDateString() === todayStr) {
+                let formattedSerials = log.serials.map((s, i) => `<b>${s}</b> [${formatDisplayMonth(log.arrivalMonths[i])}]`).join('<br>');
+                issuedTbody.innerHTML += `<tr>
+                    <td>${log.dispatchDate}</td>
+                    <td>${formattedSerials}</td>
+                    <td>${log.diameters.map(d=>(d!==null?d+'mm':'N/A')).join(', ')}</td>
+                    <td><strong>${log.destination}</strong></td>
+                    <td><span style="font-size:0.9em; font-style:italic; color:#555;">${log.type}</span></td>
+                    <td class="no-print"><button class="btn btn-danger" style="padding:2px 6px; font-size:0.8em;" onclick="cancelIssue('${key}')">Undo</button></td>
+                </tr>`;
+            }
+        });
+    }
+
+    function findValidGroupsWithBorrowing(primaryPool, secondaryPool) {
+        let primary = primaryPool.filter(w => w.diameter !== null).sort((a,b)=>a.diameter - b.diameter);
+        let secondary = secondaryPool.filter(w => w.diameter !== null).sort((a,b)=>a.diameter - b.diameter);
+        
+        let validGroups = [];
+        let usedPrimarySerials = new Set();
+        let usedSecondarySerials = new Set();
+
+        for (let i = 0; i < primary.length; i++) {
+            if (usedPrimarySerials.has(primary[i].serialNo + primary[i].arrivalMonth)) continue;
+            let matchCandidates = [ primary[i] ];
+            
+            for(let j = i+1; j < primary.length; j++) {
+                if (usedPrimarySerials.has(primary[j].serialNo + primary[j].arrivalMonth)) continue;
+                if (primary[j].diameter - primary[i].diameter > 13) break;
+                
+                matchCandidates.push(primary[j]);
+                if(matchCandidates.length === 4) break;
+            }
+            
+            if(matchCandidates.length < 4) {
+                let primaryShortageCount = 4 - matchCandidates.length;
+                let borrowedFromSecondary = [];
+                
+                for(let s = 0; s < secondary.length; s++) {
+                    let key = secondary[s].serialNo + secondary[s].arrivalMonth;
+                    if (usedSecondarySerials.has(key)) continue;
+                    
+                    let tempGroup = [...matchCandidates, secondary[s]].sort((a,b)=>a.diameter-b.diameter);
+                    if(validateDiameterRules(tempGroup)) {
+                        borrowedFromSecondary.push(secondary[s]);
+                        if(borrowedFromSecondary.length === primaryShortageCount) break;
+                    }
+                }
+                if(borrowedFromSecondary.length === primaryShortageCount) {
+                    matchCandidates = [...matchCandidates, ...borrowedFromSecondary];
+                }
+            }
+
+            if(matchCandidates.length === 4) {
+                let sortedGroup = [...matchCandidates].sort((a,b)=>a.diameter-b.diameter);
+                if(validateDiameterRules(sortedGroup)) {
+                    validGroups.push(sortedGroup);
+                    matchCandidates.forEach(w => {
+                        let uniqueKey = w.serialNo + w.arrivalMonth;
+                        if(primaryPool.some(p => p.serialNo + p.arrivalMonth === uniqueKey)) {
+                            usedPrimarySerials.add(uniqueKey);
+                        } else {
+                            usedSecondarySerials.add(uniqueKey);
+                        }
+                    });
+                }
+            }
+        }
+        return validGroups;
+    }
+
+    function validateDiameterRules(g) {
+        if(g.length !== 4) return false;
+        let diffPair1 = g[1].diameter - g[0].diameter;
+        let diffPair2 = g[3].diameter - g[2].diameter;
+        let diffExtreme = g[3].diameter - g[0].diameter;
+        return (diffPair1 <= 5 && diffPair2 <= 5 && diffExtreme <= 13);
+    }
+
+    function generateAutomatedGroups() {
+        tempGroups = []; const area = document.getElementById('groupGenerationArea'); area.innerHTML = '';
+        
+        let wheelsList = Object.keys(wheels).map(k => ({ key: k, ...wheels[k] }));
+        
+        let ss23Pool = wheelsList.filter(w => analyzeWheelTarget(w).priority === "SS2/3");
+        let ss1Pool = wheelsList.filter(w => analyzeWheelTarget(w).priority === "SS1");
+        let divPool = wheelsList.filter(w => analyzeWheelTarget(w).priority === "Division Only");
+        
+        let g23 = findValidGroupsWithBorrowing(ss23Pool, ss1Pool);
+        let deployedKeys = new Set();
+        g23.flat().forEach(w => deployedKeys.add(w.serialNo + w.arrivalMonth));
+        
+        let remainingSS1Pool = ss1Pool.filter(w => !deployedKeys.has(w.serialNo + w.arrivalMonth));
+        let remainingSS23Pool = ss23Pool.filter(w => !deployedKeys.has(w.serialNo + w.arrivalMonth));
+        
+        let g1 = findValidGroupsWithBorrowing(remainingSS1Pool, remainingSS23Pool);
+        g1.flat().forEach(w => deployedKeys.add(w.serialNo + w.arrivalMonth));
+        
+        let remainingDivPool = divPool.filter(w => !deployedKeys.has(w.serialNo + w.arrivalMonth));
+        let gDiv = findValidGroupsWithBorrowing(remainingDivPool, []);
+        
+        let html = '';
+        if(g23.length > 0) {
+            html += `<h3 style="font-size:0.95em;color:var(--dark);margin-top:10px;margin-bottom:5px;">SS2/3 Shop Priority</h3>`;
+            g23.forEach((g, i)=>{ 
+                const id=`S23_G_${i}`; 
+                let newlyMountedCount = g.filter(w => w.newlyMounted === 'Yes').length;
+                let fallbackDefault = newlyMountedCount >= 2 ? 'SS2/3' : 'SS1';
+                tempGroups.push({id:id, wheels:g, defaultTarget: fallbackDefault}); 
+                html+=renderGroupBox(id,g,['SS2/3','SS1','UDZ','MD','JP'], fallbackDefault); 
+            });
+        }
+        if(g1.length > 0) {
+            html += `<h3 style="font-size:0.95em;color:var(--dark);margin-top:10px;margin-bottom:5px;">SS1 Shop Priority</h3>`;
+            g1.forEach((g,i)=>{ 
+                const id=`S1_G_${i}`; 
+                let newlyMountedCount = g.filter(w => w.newlyMounted === 'Yes').length;
+                let fallbackDefault = newlyMountedCount >= 2 ? 'SS2/3' : 'SS1';
+                tempGroups.push({id:id, wheels:g, defaultTarget: fallbackDefault}); 
+                html+=renderGroupBox(id,g,['SS1','SS2/3','UDZ','MD','JP'], fallbackDefault); 
+            });
+        }
+        if(gDiv.length > 0) {
+            html += `<h3 style="font-size:0.95em;color:var(--dark);margin-top:10px;margin-bottom:5px;">Divisional Allocation</h3>`;
+            gDiv.forEach((g,i)=>{ 
+                const id=`DIV_G_${i}`; tempGroups.push({id:id, wheels:g, defaultTarget: 'UDZ'}); 
+                html+=renderGroupBox(id,g,['UDZ','MD','JP'], 'UDZ'); 
+            });
+        }
+        area.innerHTML = html || '<p style="color:var(--danger);font-size:0.9em;margin:5px 0;">No matching 4-wheel combinations formed.</p>';
+    }
+
+    function renderGroupBox(gId, g, options, defaultSelect) {
+        let opHtml = options.map(o => `<option value="${o}" ${o===defaultSelect?'selected':''}>${o}</option>`).join('');
+        let serials = g.map(w => `<b>${w.serialNo}</b> [${formatDisplayMonth(w.arrivalMonth)}] (${w.diameter}mm)`).join('<br> ');
+        return `<div class="group-box" id="box_${gId}">
+                <div style="font-size:0.85em;line-height:1.4;margin-bottom:6px;"><strong>Set Matrix:</strong><br>${serials}</div>
+                <div style="display:flex;gap:4px;">
+                <select id="dest_${gId}" style="padding:4px;font-size:0.85em;">${opHtml}</select>
+                <button class="btn btn-success" style="padding:4px 8px;font-size:0.8em;" onclick="issueGroup('${gId}')">Issue</button>
+                </div></div>`;
+    }
+
+    function issueGroup(gId) {
+        const found = tempGroups.find(t => t.id === gId); if(!found) return;
+        const dest = document.getElementById(`dest_${gId}`).value; const now = new Date();
+        
+        let newIssue = {
+            timestampRaw: now.toISOString(),
+            dispatchDate: now.toLocaleTimeString('en-IN') + ' ' + now.toLocaleDateString('en-IN'),
+            serials: found.wheels.map(w=>w.serialNo), 
+            arrivalMonths: found.wheels.map(w=>w.arrivalMonth),
+            diameters: found.wheels.map(w=>w.diameter),
+            destination: dest, type: "Automated Group", arrivalMonthReference: found.wheels[0].arrivalMonth,
+            originalWheelsData: found.wheels.map(w => ({serialNo: w.serialNo, arrivalMonth: w.arrivalMonth, bearingDate: w.bearingDate, diameter: w.diameter, bearingType: w.bearingType, newlyMounted: w.newlyMounted}))
+        };
+        
+        // Save to log & delete from wheels
+        database.ref('issuedLog').push(newIssue);
+        found.wheels.forEach(w => {
+            database.ref('wheels/' + w.key).remove();
+        });
+    }
+
+    function issueIndividual(key) {
+        const w = wheels[key]; const dest = document.getElementById(`manualDes_${key}`).value; const now = new Date();
+        let newIssue = {
+            timestampRaw: now.toISOString(),
+            dispatchDate: now.toLocaleTimeString('en-IN') + ' ' + now.toLocaleDateString('en-IN'),
+            serials: [w.serialNo], 
+            arrivalMonths: [w.arrivalMonth],
+            diameters: [w.diameter], destination: dest, type: "Individual", arrivalMonthReference: w.arrivalMonth,
+            originalWheelsData: [{serialNo: w.serialNo, arrivalMonth: w.arrivalMonth, bearingDate: w.bearingDate, diameter: w.diameter, bearingType: w.bearingType, newlyMounted: w.newlyMounted}]
+        };
+        
+        database.ref('issuedLog').push(newIssue);
+        database.ref('wheels/' + key).remove();
+    }
+
+    function cancelIssue(logKey) {
+        const targetLog = issuedLog[logKey];
+        if(!targetLog) return;
+        
+        targetLog.originalWheelsData.forEach(w => {
+            let exists = Object.keys(wheels).some(k => wheels[k].serialNo === w.serialNo && wheels[k].arrivalMonth === w.arrivalMonth);
+            if(!exists) {
+                database.ref('wheels').push(w);
+            }
+        });
+        
+        database.ref('issuedLog/' + logKey).remove();
+        if(document.getElementById('summaryModal').style.display === 'flex') {
+            renderMonthlySummary();
+        }
+    }
+
+    function openSummary() { document.getElementById('summaryModal').style.display = 'flex'; renderMonthlySummary(); }
+    function closeSummary() { document.getElementById('summaryModal').style.display = 'none'; }
+    
+    function renderMonthlySummary() {
+        const m = document.getElementById('summaryMonthFilter').value; const content = document.getElementById('summaryContent');
+        if(!m) { content.innerHTML = "<p>Select a month.</p>"; return; }
+        
+        let avail = Object.keys(wheels).map(k => wheels[k]).filter(w => w.arrivalMonth === m);
+        avail.sort((a, b) => a.serialNo.localeCompare(b.serialNo, undefined, {numeric: true}));
+        
+        let html = `<h4 style="margin:10px 0 5px 0;">Available Pool Registered under Filter (${avail.length})</h4>`;
+        if(avail.length===0) html+='<p style="color:#777;">No matching inventory stock tracking this period reference range.</p>';
+        else {
+            html += `<table><thead><tr><th>Serial No [Month]</th><th>Diameter</th><th>Bearing Month</th><th>Target Priority</th></tr></thead><tbody>`;
+            avail.forEach(w => { 
+                const ann = analyzeWheelTarget(w); 
+                const diameterText = w.diameter !== null ? `${w.diameter} mm` : '<i>Missing</i>';
+                html += `<tr class="${ann.colorClass}"><td><strong>${w.serialNo}</strong> <small>[${formatDisplayMonth(w.arrivalMonth)}]</small></td><td>${diameterText}</td><td>${w.bearingDate ? formatDisplayMonth(w.bearingDate) : 'N/A'}</td><td><b>${ann.priority}</b></td></tr>`; 
+            });
+            html += '</tbody></table>';
+        }
+        
+        html += `<h4 style="margin:15px 0 5px 0;">Dispatches Tracking Ledger</h4>`;
+        
+        let count = 0;
+        let logHtml = `<table><thead><tr><th>Timestamp</th><th>Serials Matched</th><th>Dest</th><th class="no-print">Action</th></tr></thead><tbody>`;
+        
+        Object.keys(issuedLog).forEach((key) => {
+            let l = issuedLog[key];
+            if(l.arrivalMonthReference === m || (l.timestampRaw && l.timestampRaw.substring(0,7) === m)) {
+                count++;
+                let formattedSerials = l.serials.map((s, i) => `${s} [${formatDisplayMonth(l.arrivalMonths[i])}]`).join(', ');
+                logHtml += `<tr>
+                    <td style="font-size:0.85em;">${l.dispatchDate}</td>
+                    <td><strong>${formattedSerials}</strong><br><small style="color:#555">Type: ${l.type}</small></td>
+                    <td><strong>${l.destination}</strong></td>
+                    <td class="no-print"><button class="btn btn-danger" style="padding:2px 6px; font-size:0.8em;" onclick="cancelIssue('${key}')">Undo</button></td>
+                </tr>`;
+            }
+        });
+        logHtml += '</tbody></table>';
+        
+        if(count === 0) {
+            html += '<p style="color:#777;">No recorded dispatches captured inside this target window timeline.</p>';
+        } else {
+            html += logHtml;
+        }
+        content.innerHTML = html;
+    }
+</script>
+</body>
+</html>
